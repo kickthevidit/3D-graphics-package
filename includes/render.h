@@ -12,6 +12,7 @@ using std::vector;
 namespace Render {
 
 void MakeJPG(char const* file_name, vector<vector<Pixel>>& data);
+
 }
 
 

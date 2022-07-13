@@ -22,5 +22,13 @@ void Render::MakeJPG(char const* file_name, vector<vector<Pixel>>& data) {
 		}
 	}
 
+	// vector<unsigned char> pixmap(w * h * 3);
+	// for (size_t i = 0; i < w * h; ++i) {
+
+	// 	for (size_t j = 0; j < 3; ++j) {
+	// 		pixmap[i * 3 + j] = (unsigned char) (255 * )
+	// 	}
+	// }
+
     stbi_write_jpg(file_name, w, h, channels, pixels, 90);
 }
