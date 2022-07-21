@@ -1,0 +1,5 @@
+make --dry-run --keep-going --print-directory
+make: Entering directory `/Users/viditgautam/Documents/Projects/ray-tracting'
+clang++ -std=c++20 -Iincludes -g -fcommon -fstandalone-debug -Wall -Wextra ./includes/pixel.h ./src/render.cpp ./src/main.cpp includes/pixel.h src/render.cpp src/main.cpp
+make: Leaving directory `/Users/viditgautam/Documents/Projects/ray-tracting'
+ 
