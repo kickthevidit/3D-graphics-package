@@ -116,6 +116,7 @@ struct Pixel {
 	unsigned Y = 0;
 	unsigned Z = 0;
 };
+
 std::ostream& operator<<(std::ostream& os, const Pixel& p) {
 	os << p.X << ' ' << p.Y << ' ' << p.Z;
 	return os;
@@ -128,39 +129,33 @@ std::ostream& operator<<(std::ostream& o, const Vec3& v) {
 
 struct Material {
 	Material() = default;
-	Material(Pixel& d, double& s, array<double, 3>& al): diffuse_color(d), specular_exponent(s), albedo(al) {}
+	Material(Pixel& d, double s, Vec3 al): diffuse_color(d), specular_exponent(s), albedo(al) {}
 	Material(Pixel& p): diffuse_color(p) {}
 
 	Pixel diffuse_color = Pixel(255, 255, 255);
-	double specular_exponent = 50;
-	array<double, 3> albedo = {1, 0, 0};
+	double specular_exponent = 8;
+	Vec3 albedo = Vec3{1, 1, 1};
 };
 
 class Shape {
 public:
 	Shape() = default;
-	Shape(Pixel& p, double& s, array<double, 2>& al): M(p, s, al) {}
+	Shape(Pixel& p, double s, Vec3& al): M(p, s, al) {}
 	Shape(Pixel& p): M(p) {}
+	Shape(Material& m): M(m) {}
 
 	virtual bool RayIntersect(const Vec3& orig, const Vec3& dir, double& t0) const {return false;}// check if a ray intersects with our shape
 
 	Pixel GetColor() const {return M.diffuse_color;}
 	Material GetMaterial() const {return M;}
 
-	virtual Vec3 GetNormal(const Vec3& point) const {
-		return Vec3(0,0,0);
-	}
+	virtual Vec3 GetNormal(const Vec3& point) const {return Vec3(0,0,0);}
 
-	bool CastRay(const Vec3 & orig, const Vec3& dir, const Shape& sh) const;
-	bool CastRay(const Vec3 & orig, const Vec3& dir, const Shape& sh, double& shape_dist) const;
 private:
 	Material M = Material();
 };
 
-bool Shape::CastRay(const Vec3& orig, const Vec3& dir, const Shape& sh) const {
-	double shape_dist = std::numeric_limits<double>::max();
-	return (sh.RayIntersect(orig, dir, shape_dist));
-}
+
 
 class Sphere : public Shape {
   Vec3 center = Vec3(0, 0, 0);
@@ -169,8 +164,9 @@ class Sphere : public Shape {
 public:
 	Sphere() = default;
 	Sphere(const Vec3& c, double r): center(c), radius(r), Shape() {}
-	Sphere(const Vec3& c, double r, Pixel& p, double d ,array<double, 2> a): center(c), radius(r), Shape(p, d, a) {}
+	Sphere(const Vec3& c, double r, Pixel& p, double d ,Vec3 al): center(c), radius(r), Shape(p, d, al) {}
 	Sphere(const Vec3& c, double r, Pixel& p): center(c), radius(r), Shape(p) {}
+	Sphere(const Vec3& c, double r, Material& m): center(c), radius(r), Shape(m) {}
 
 	Vec3 GetCenter() const {return center;}
 	virtual Vec3 GetNormal(const Vec3& point) const;
@@ -201,7 +197,7 @@ Vec3 Sphere::GetNormal(const Vec3& point) const {
 	return normal;
 }
 
-class Line: public Shape {
+/* class Line: public Shape {
 	Vec3 orig = Vec3(0,0,0);
 	Vec3 dir = Vec3(1,1,-1);
 
@@ -219,7 +215,7 @@ public:
 		return false;
 	}
 };
-
+ */
 struct Light {
   Light() = default;
   Light(const Vec3& p, const double& i) : pos(p), intensity(i) {}
@@ -228,7 +224,7 @@ struct Light {
   double intensity = 0.5;
 };
 
-Vec3 Reflect(Vec3& I, Vec3& N) {
+Vec3 Reflect(const Vec3& I, const Vec3& N) {
 	return I - N * (double)2 * (I * N);
 }
 
@@ -251,6 +247,40 @@ bool EnvironmentIntersect(const Vec3 &orig, const Vec3 &dir, const vector<Shape*
 	return min_dist < std::numeric_limits<double>::max();
 }
 
+Pixel CastRay(const Vec3& orig, const Vec3& dir, const vector<Shape*>& objects, const vector<Light>& lights, Pixel& bg_col, unsigned depth = 0) {
+	Vec3 coord, coord_n;
+	Material mat;
+	double min_dist = std::numeric_limits<double>::max();
+
+	if (depth > 7 || !EnvironmentIntersect(orig, dir, objects, min_dist, coord, coord_n, mat)) return bg_col;
+
+	Vec3 reflect_dir = Reflect(dir, coord_n);
+	Vec3 reflect_orig = reflect_dir * coord_n < 0 ? coord - coord_n * 1e-3 : coord + coord_n * 1e-3; // shift the orig to prevent obstruction by object
+	Pixel reflect_color = CastRay(reflect_orig, reflect_dir, objects, lights, bg_col, depth + 1);
+
+	double diffuse_light_intensity = 0, specular_light_intensity = 0;
+	for (const Light& l: lights) {
+		Vec3 light_dir = (l.pos - coord);
+		light_dir.N(); // convert to unit vector
+		double light_distance = (l.pos - coord).M();
+		double shadow_dist;
+
+		// shadows processing
+		Vec3 shadow_orig = light_dir * coord_n < 0 ? coord - coord_n * 1e-3 : coord + coord_n * 1e-3;
+		Vec3 shadow_coord, shadow_n;
+		Material tmp_mat;
+		if ((EnvironmentIntersect(shadow_orig, light_dir, objects, shadow_dist, shadow_coord, shadow_n, tmp_mat)) && ((shadow_coord - shadow_orig).M() < light_distance)) continue;
+
+		// reflect lines
+
+
+		diffuse_light_intensity += l.intensity * max((double) 0, light_dir * coord_n);
+		specular_light_intensity += pow(max((double)0, Reflect(light_dir, coord_n)*dir), mat.specular_exponent) * l.intensity;
+	}
+
+	return mat.diffuse_color * diffuse_light_intensity * mat.albedo.I + Pixel(Vec3(1,1,1)) * specular_light_intensity * mat.albedo.J + reflect_color * mat.albedo.K;
+}
+
 namespace Render {
 	void WritePPI(vector<vector<Pixel>>& pixels, string& file_path) {
 
@@ -258,7 +288,7 @@ namespace Render {
 
 		std::ofstream ofs;
 		ofs.open(file_path);
-		ofs << "P3\n" << pixels.size() << " " << pixels.at(0).size() << "\n255\n";
+		ofs << "P3\n" << pixels.at(0).size() << " " << pixels.size() << "\n255\n";
 		for (vector<Pixel>& row: pixels) {
 			for (Pixel& pixel: row) {
 				ofs << pixel << "\t";
@@ -274,65 +304,50 @@ int main() {
 	// clear; clang++ -std=c++20 main.cpp
 
 	constexpr unsigned width = 1024;
-	constexpr unsigned height = 1024; // bug where if canvas is not square it doesn't work
+	constexpr unsigned height = 768; // bug where if canvas is not square it doesn't work
 	const Vec3 orig(0,0,0);
-    Pixel bg_col = Pixel(52, 61, 82);
+    Pixel bg_col = Pixel(64,64,64);
 
-	string file_path = "test/img/5";
+	string file_path = "test/img/7";
 	vector<vector<Pixel>> sample_img(height, vector<Pixel>(width, Pixel(0,0,0)));
-	for (int i = 0; i < height; ++i) {
-		for (int j = 0; j < width; ++j) {
-			sample_img[i][j] = bg_col; // base color
-		}
-	}
 
-	vector<Vec3> positions = {Vec3(-5, 3, -20), Vec3(0, 0, -1000), Vec3(-100, 35, -1050), Vec3(-100, -100, -1100), Vec3(0,0,-15)};
-	vector<Pixel> colors = {Pixel(33, 189, 3), Pixel(67, 0, 89), Pixel(255, 51, 153)};
-	map<string, Pixel> color_map = {
+	map<string, Pixel> cmap = {
 		{"Tech_Green", Pixel(33, 189, 3)}, 
 		{"Purple", Pixel(67, 0, 89)},
 		{"Pink", Pixel(255, 51, 153)},
 		{"Orange", Pixel(237, 128, 2)},
 		{"Yellow", Pixel(255, 247, 0)},
-		{"Dark Blue", Pixel(55, 0, 255)},
-		{"Red", Pixel(200, 0, 0)},
-		{"Sky Blue", Pixel(4, 158, 209)},
-		{"White", Pixel(255, 255, 255)},
-		{"Pearl", Pixel(180, 190, 240)},
-		{"Dark Red", Pixel(80, 0, 0)}
+		{"blue", Pixel(55, 0, 255)},
+		{"red", Pixel(200, 0, 0)},
+		{"blue1", Pixel(4, 158, 209)},
+		{"white", Pixel(255, 255, 255)},
+		{"pearl", Pixel(180, 190, 240)},
+		{"red1", Pixel(80, 0, 0)},
+		{"Black", Pixel(0,0,0)}
 	};
-	map<string, array<double, 2>> material_map = {
-		{"aluminium-matte", {55,75}},
-		{"aluminium-polished", {65,75}},
-		{"aluminium-shiny", {80,87}},
-		{"chrome-polished", {60,70}},
-		{"concrete-rough", {20,30}}
-	};
-
 	vector<Shape*> objects;
 	vector<Light> lights;
-	// Sphere *a = new Sphere(positions[0], 1, color_map.at("Yellow"));
-	// Sphere *b = new Sphere(positions[1], 250, color_map.at("Sky Blue"));
-	// Sphere *c = new Sphere(positions[2], 300, color_map.at("White"));
 
-	Sphere *f = new Sphere(Vec3(-3,    1.5,   -16), 2, color_map.at("Pearl"));
-	Sphere *g = new Sphere(Vec3(-1.0, -1.5, -12), 2, color_map.at("Dark Red"), (double) 10, {0.9, 0.1});
-	Sphere *h = new Sphere(Vec3(-1.0, 3, -12), 2, color_map.at("Dark Red"), (double) 10, {0.9, 0.1});
+	Material ivory(cmap.at("pearl"), 50., Vec3{0.6, 0.3, 0.1});
+	Material red_rubber(cmap.at("red1"), 10., Vec3(0.9, 0.1, 0.0));
+	Material mirror(cmap.at("white"), 1425., Vec3(0, 10, 0.8));
 
-    // objects.push_back(a);
-	// objects.push_back(b);
-	// objects.push_back(c);
-	// objects.push_back(d);
-	// objects.push_back(e);
-	objects.push_back(f);
-	objects.push_back(g);
+	
+	Sphere *a = new Sphere(Vec3(-3,    1,   -16), 3, ivory);
+	Sphere *b = new Sphere(Vec3(-1.0, -1.5, -12), 2, red_rubber);
+	Sphere *c = new Sphere({6.5, 1, -20}, 5, mirror);
+	// Sphere *f = new Sphere(Vec3(-3,    1,   -16), 3, cmap.at("pearl"));
+	// Sphere *g = new Sphere(Vec3(-1.0, -1.5, -12), 2, cmap.at("red1"), (double) 10, {0.9, 0.1, 0.2});
+	// Sphere *h = new Sphere(Vec3(-1.0, 3, -12), 2, cmap.at("red1"), (double) 10, {0.9, 0.1, 0.3});
 
-	// lights.push_back(Light(Vec3(-5, 4, 0), 1.3));
-	// lights.push_back(Light(Vec3(5, -14, -3), 0.8));
-	lights.push_back(Light(Vec3(-1,-5,-10), 1.3));
-	lights.push_back(Light(Vec3(-1,20,-10), 1.3));
+	objects.push_back(a);
+	objects.push_back(b);
+	objects.push_back(c);
 
-    double fov = atan((double) width / 2);
+	lights.push_back(Light(Vec3(0,-10,0), 0.5));
+	lights.push_back(Light(Vec3(0,10,0), 0.5));
+
+    double fov = M_PI / 2.;
 
 	for (unsigned i = 0; i < height; ++i) {
 		for (unsigned j = 0; j < width; ++j) {
@@ -341,23 +356,7 @@ int main() {
 			Vec3 dir = Vec3(x, y, -1);
 			dir.N(); // normalize
 
-			// parameters of the object being hit
-			Vec3 coord;
-			Vec3 coord_n; // normalised
-			double min_dist = std::numeric_limits<double>::max();
-			Material mat;
-
-			if (EnvironmentIntersect(orig, dir, objects, min_dist, coord, coord_n, mat)) {
-				double diffuse_light_intensity = 0, specular_light_intensity = 0;
-				for (Light& l: lights) {
-					Vec3 light_dir = (l.pos - coord);
-					light_dir.N();
-
-					diffuse_light_intensity += l.intensity * max((double)0, light_dir * coord_n);
-					specular_light_intensity += pow(max((double) 0, Reflect(light_dir, coord_n)*dir), mat.specular_exponent)* l.intensity;
-				}
-				sample_img[i][j] = mat.diffuse_color * diffuse_light_intensity * mat.albedo[0] + Pixel(Vec3(1,1,1) * specular_light_intensity * mat.albedo[1]);
-			}
+			sample_img[i][j] = CastRay(orig, dir, objects, lights, bg_col);
 		}
 	}
 
