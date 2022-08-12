@@ -20,6 +20,7 @@ struct Vec3 {
 	Vec3(double i, double j, double k): I(i), J(j), K(k) {}
 	Vec3(const Vec3& copy): I(copy.I), J(copy.J), K(copy.K) {}
 	Vec3(double x): I(x), J(x), K(x) {}
+	~Vec3() = default;
 	
 	Vec3& operator=(const Vec3& copy) {
 		if (&copy == this) return *this;
@@ -29,6 +30,8 @@ struct Vec3 {
 		K = copy.K;
 		return *this;
 	}
+
+	bool operator==(const Vec3& vec) const {return (I == vec.I && J == vec.J && K == vec.K);}
 
 	Vec3 operator+(const Vec3& v) const {
 		Vec3 r;
@@ -59,7 +62,8 @@ struct Vec3 {
 		return ret;
 	}
 
-	double M() {
+
+	double M() const {
 		return sqrt(I*I + J * J + K * K);
 	}
 
@@ -75,6 +79,14 @@ struct Vec3 {
 		r.J = v.J * i;
 		r.K = v.K * i;
 		return r;	
+	}
+
+	friend Vec3 operator/(const Vec3& v, double d) {
+		Vec3 r;
+		r.I = v.I / d;
+		r.J = v.J / d;
+		r.K = v.K / d;
+		return r;
 	}
 
 	friend std::ostream& operator<<(std::ostream& o, const Vec3& v);
@@ -134,7 +146,7 @@ struct Material {
 
 	Pixel diffuse_color = Pixel(255, 255, 255);
 	double specular_exponent = 8;
-	Vec3 albedo = Vec3{1, 1, 1};
+	Vec3 albedo = Vec3{1, 1, 1}; // diffuse color, specular color, reflective color
 };
 
 class Shape {
@@ -155,20 +167,18 @@ private:
 	Material M = Material();
 };
 
-
-
 class Sphere : public Shape {
   Vec3 center = Vec3(0, 0, 0);
   double radius = 1;
 
 public:
 	Sphere() = default;
-	Sphere(const Vec3& c, double r): center(c), radius(r), Shape() {}
-	Sphere(const Vec3& c, double r, Pixel& p, double d ,Vec3 al): center(c), radius(r), Shape(p, d, al) {}
-	Sphere(const Vec3& c, double r, Pixel& p): center(c), radius(r), Shape(p) {}
-	Sphere(const Vec3& c, double r, Material& m): center(c), radius(r), Shape(m) {}
+	Sphere(const Vec3& c, double r): center(c), radius(r), Shape() {if (radius < 0) radius*=-1;}
+	Sphere(const Vec3& c, double r, Pixel& p, double d ,Vec3 al): center(c), radius(r), Shape(p, d, al) {if (radius < 0) radius*=-1;}
+	Sphere(const Vec3 &c, double r, Pixel &p): center(c), radius(r), Shape(p) {if (radius < 0) radius *= -1;}
+	Sphere(const Vec3 &c, double r, Material &m): center(c), radius(r), Shape(m) {if (radius < 0)radius *= -1;}
 
-	Vec3 GetCenter() const {return center;}
+    Vec3 GetCenter() const {return center;}
 	virtual Vec3 GetNormal(const Vec3& point) const;
 
     virtual bool RayIntersect(const Vec3 &orig, const Vec3 &dir, double &t0) const;
@@ -197,25 +207,55 @@ Vec3 Sphere::GetNormal(const Vec3& point) const {
 	return normal;
 }
 
-/* class Line: public Shape {
-	Vec3 orig = Vec3(0,0,0);
-	Vec3 dir = Vec3(1,1,-1);
+// TODO: finish plane, add bounds to turn it into a rectangle
+
+class Checkerboard: public Shape {
+	Pixel color_2;
+	Vec3 normal;
+	double d; // distance of origin to plane
+	Vec3 side; // dir vec showing board orientation, going from one corner to another
+	Vec3 centre;
+public:
+	Checkerboard(Vec3 n, double d_, Pixel p, Vec3 cen, Vec3 s , Material& m): normal(n), d(d_), color_2(p), Shape(m), centre(cen), side(s) {}
+
+	bool RayIntersect(const Vec3& orig, const Vec3& dir, double& t0) const;
+	virtual Vec3 GetNormal(const Vec3& point) const {return normal;}
+};
+
+bool Checkerboard::RayIntersect(const Vec3& orig, const Vec3& dir, double& t0) const {
+	// halfway done
+	double Vd = normal * dir ;
+	if (Vd == 0) return false; // ray is parallel to plane}
+	double v0 = (-(normal * orig + d));
+	t0 = v0 / Vd;
+	if (t0 < 0) return false; // intersects behind camera
+	Vec3 cont_pt = orig + dir * t0;
+	if ((((centre - cont_pt) * side) / pow(side.M(), 2)) > (side / 2).M()) return false;
+	return true;
+}
+
+class Line: public Shape{
+	Vec3 pos;
+	Vec3 dir_;
 
 public:
-	Line() = default;
-	Line(const Vec3& o, const Vec3& d): orig(o), dir(d), Shape() {
-		if (dir.I == 0 && dir.J == 0 && dir.K == 0) throw std::invalid_argument("Line::Line() -> dir cannot be 0");
-	}
-	Line(const Vec3& o, const Vec3& d, Pixel& p, double& s, array<double, 2>& al): orig(o), dir(d), Shape(p, s, al) {
-		if (dir.I == 0 && dir.J == 0 && dir.K == 0) throw std::invalid_argument("Line::Line() -> dir cannot be 0");
-    }
+	Line(Vec3 o, Vec3 d, Material m): pos(o), dir_(d), Shape(m){}
 
-
-	bool RayIntersect(const Vec3& orig, const Vec3& dir, double& t0) const {
-		return false;
-	}
+	bool RayIntersect(const Vec3& orig, const Vec3& dir, double& t0) const;
+	virtual Vec3 GetNormal(const Vec3& point) const {return dir_;}
 };
- */
+
+bool Line::RayIntersect(const Vec3& orig, const Vec3& dir, double& t0) const {
+	if (dir == dir_) return false; // parallel lines
+
+	double denom = dir.J - (dir.I * dir_.J) / dir_.I;
+	if (denom == 0) return false;
+
+	t0 = ((pos - orig).J - (pos - orig).I*(dir_.J / dir_.I)) / denom;
+	if (t0 < 0) return false;
+	return true;
+}
+
 struct Light {
   Light() = default;
   Light(const Vec3& p, const double& i) : pos(p), intensity(i) {}
@@ -239,20 +279,50 @@ bool EnvironmentIntersect(const Vec3 &orig, const Vec3 &dir, const vector<Shape*
 				std::cout << "Is a sphere\n";
 			} */
 			point_n = s->GetNormal(point);
+			if (point_n == Vec3(0,0,0)) std::cout << point << ',' << point_n << '\n';
 			// std::cout << "Normal: " << point_n << '\n';
 			obj_mat = s->GetMaterial();
 		}
 	}
 	shape_dist = min_dist;
-	return min_dist < std::numeric_limits<double>::max();
-}
+
+	// double checkerboard_dist = std::numeric_limits<double>::max();
+	// if (fabs(dir.J) > 1e-3) {
+	// 	double d  = -(orig.J + 5) / dir.J;
+	// 	Vec3 pt = orig + dir*d;
+	// 	if (d > 0 && fabs(pt.I) < 10 && pt.K > -30 && d < min_dist) {
+	// 		checkerboard_dist = d;
+	// 		point = pt;
+	// 		point_n = Vec3(0,1,0);
+	// 		obj_mat.diffuse_color = (int(.5 * point.I + 1000) + int(.5 * point.K)) & 1 ? Vec3(1, 1, 1) : Vec3(1, .7, .3);
+	// 		obj_mat.diffuse_color = obj_mat.diffuse_color * .3;
+    //     }
+	// }
+
+	double checkerboard_dist = std::numeric_limits<double>::max();
+	if (fabs(dir.I) > 1e-3) {
+		double d  = -(orig.I - 0.5) / dir.I;
+		Vec3 pt = orig + dir*d;
+		if (d > 0 && fabs(pt.J) < 10 && pt.K > -30 && d < min_dist) {
+			checkerboard_dist = d;
+			point = pt;
+			point_n = Vec3(1,0,0);
+			obj_mat.diffuse_color = (int(.5 * point.J + 1000) + int(.5 * point.K)) & 1 ? Vec3(1, 1, 1) * 255 : Vec3(1, .7, .3) * 255;
+			obj_mat.diffuse_color = obj_mat.diffuse_color * .3;
+			obj_mat.albedo = Vec3(0.9, 0.1, 0.);
+        }
+	}
+
+	return min(min_dist, checkerboard_dist) < std::numeric_limits<double>::max();
+	// return min_dist < std::numeric_limits<double>::max()
+;}
 
 Pixel CastRay(const Vec3& orig, const Vec3& dir, const vector<Shape*>& objects, const vector<Light>& lights, Pixel& bg_col, unsigned depth = 0) {
 	Vec3 coord, coord_n;
 	Material mat;
 	double min_dist = std::numeric_limits<double>::max();
 
-	if (depth > 7 || !EnvironmentIntersect(orig, dir, objects, min_dist, coord, coord_n, mat)) return bg_col;
+	if (depth > 4 || !EnvironmentIntersect(orig, dir, objects, min_dist, coord, coord_n, mat)) return bg_col;
 
 	Vec3 reflect_dir = Reflect(dir, coord_n);
 	Vec3 reflect_orig = reflect_dir * coord_n < 0 ? coord - coord_n * 1e-3 : coord + coord_n * 1e-3; // shift the orig to prevent obstruction by object
@@ -266,19 +336,28 @@ Pixel CastRay(const Vec3& orig, const Vec3& dir, const vector<Shape*>& objects, 
 		double shadow_dist;
 
 		// shadows processing
-		Vec3 shadow_orig = light_dir * coord_n < 0 ? coord - coord_n * 1e-3 : coord + coord_n * 1e-3;
+		Vec3 shadow_orig = light_dir * coord_n < 0 ? coord - coord_n * 1e-3 : coord + coord_n * 1e-3; // shift point a bit to prevent collision
 		Vec3 shadow_coord, shadow_n;
 		Material tmp_mat;
 		if ((EnvironmentIntersect(shadow_orig, light_dir, objects, shadow_dist, shadow_coord, shadow_n, tmp_mat)) && ((shadow_coord - shadow_orig).M() < light_distance)) continue;
 
-		// reflect lines
-
-
 		diffuse_light_intensity += l.intensity * max((double) 0, light_dir * coord_n);
+		// if (diffuse_light_intensity == 0) std::cout << l.intensity << ',' << light_dir * coord_n << '\n'; 
 		specular_light_intensity += pow(max((double)0, Reflect(light_dir, coord_n)*dir), mat.specular_exponent) * l.intensity;
 	}
 
-	return mat.diffuse_color * diffuse_light_intensity * mat.albedo.I + Pixel(Vec3(1,1,1)) * specular_light_intensity * mat.albedo.J + reflect_color * mat.albedo.K;
+	// std::cout << "Final Color: " << (mat.diffuse_color * diffuse_light_intensity * mat.albedo.I + Pixel(Vec3(1,1,1)) * specular_light_intensity * mat.albedo.J + reflect_color * mat.albedo.K) << '\n';
+
+	Pixel out = mat.diffuse_color * diffuse_light_intensity * mat.albedo.I + Pixel(Vec3(1,1,1)) * specular_light_intensity * mat.albedo.J + reflect_color * mat.albedo.K;
+
+	/* if (out.X == 0 && out.Y == 0 && out.Z == 0) {
+		std::cout << "Final Color: " << (mat.diffuse_color * diffuse_light_intensity * mat.albedo.I + Pixel(Vec3(1,1,1)) * specular_light_intensity * mat.albedo.J + reflect_color * mat.albedo.K) << '\t';
+		std::cout << mat.diffuse_color << ',' << diffuse_light_intensity << ',' << mat.albedo.I << '\t';
+		std::cout << Pixel(Vec3(1,1,1)) * specular_light_intensity << ',' << mat.albedo.J << '\t';
+		std::cout << reflect_color << ',' << mat.albedo.K << '\n';
+    } */
+	
+	return out;
 }
 
 namespace Render {
@@ -297,6 +376,8 @@ namespace Render {
 		}
 		ofs.close();
 	}
+
+
 }
 
 int main() {
@@ -306,48 +387,63 @@ int main() {
 	constexpr unsigned width = 1024;
 	constexpr unsigned height = 768; // bug where if canvas is not square it doesn't work
 	const Vec3 orig(0,0,0);
-    Pixel bg_col = Pixel(64,64,64);
+    Pixel bg_col = Pixel(73,178,203);
 
-	string file_path = "test/img/7";
+	string file_path = "test/img/11";
 	vector<vector<Pixel>> sample_img(height, vector<Pixel>(width, Pixel(0,0,0)));
 
 	map<string, Pixel> cmap = {
 		{"Tech_Green", Pixel(33, 189, 3)}, 
 		{"Purple", Pixel(67, 0, 89)},
 		{"Pink", Pixel(255, 51, 153)},
-		{"Orange", Pixel(237, 128, 2)},
-		{"Yellow", Pixel(255, 247, 0)},
+		{"orange", Pixel(237, 128, 2)},
+		{"yellow", Pixel(255, 247, 0)},
 		{"blue", Pixel(55, 0, 255)},
 		{"red", Pixel(200, 0, 0)},
 		{"blue1", Pixel(4, 158, 209)},
 		{"white", Pixel(255, 255, 255)},
 		{"pearl", Pixel(180, 190, 240)},
 		{"red1", Pixel(80, 0, 0)},
-		{"Black", Pixel(0,0,0)}
+		{"black", Pixel(0,0,0)},
+		{"green", Pixel(108,183,53)},
+		{"glass_green", Pixel(209,234,197)}
 	};
 	vector<Shape*> objects;
 	vector<Light> lights;
 
-	Material ivory(cmap.at("pearl"), 50., Vec3{0.6, 0.3, 0.1});
+	Material ivory(cmap.at("white"), 50., Vec3{0.6, 0.3, 0.1});
+	Material pearl(cmap.at("pearl"), 45., Vec3{0.6, 0.3, 0.2});
 	Material red_rubber(cmap.at("red1"), 10., Vec3(0.9, 0.1, 0.0));
-	Material mirror(cmap.at("white"), 1425., Vec3(0, 10, 0.8));
+	Material mirror(cmap.at("black"), 1425., Vec3(1, 1, 1));
+	Material plane_material(cmap.at("white"), 0, Vec3(1, 0.0, 0.0));
+	Material line_material(cmap.at("white"), 12451251., Vec3(1, 1, 0));
 
 	
-	Sphere *a = new Sphere(Vec3(-3,    1,   -16), 3, ivory);
-	Sphere *b = new Sphere(Vec3(-1.0, -1.5, -12), 2, red_rubber);
-	Sphere *c = new Sphere({6.5, 1, -20}, 5, mirror);
-	// Sphere *f = new Sphere(Vec3(-3,    1,   -16), 3, cmap.at("pearl"));
-	// Sphere *g = new Sphere(Vec3(-1.0, -1.5, -12), 2, cmap.at("red1"), (double) 10, {0.9, 0.1, 0.2});
-	// Sphere *h = new Sphere(Vec3(-1.0, 3, -12), 2, cmap.at("red1"), (double) 10, {0.9, 0.1, 0.3});
+	// Sphere *a = new Sphere(Vec3(-3,    0,   -16), 1.2, ivory);
+	Sphere *b = new Sphere(Vec3(-2, -0.5, -18), 2.3, red_rubber);
+	Sphere *d = new Sphere({-1, -1.5, -12}, 1.05, pearl);
+	// Sphere *e = new Sphere({-2, -1, -30}, 4, mirror);
+	// Checkerboard *f = new Checkerboard({-6, 0, 0}, 6, cmap.at("orange"), {0,0,0}, {0, 100, 0}, plane_material);
 
-	objects.push_back(a);
+	vector<Line*> lines;
+	for (int i = 1; i < 2; ++i) {
+		// lines.push_back(new Line({(double)i, 0, 0}, {0,0,(double)i}, line_material));
+		lines.push_back(new Line({0, 0,(double) i}, {(double) i,0,0}, line_material));
+	}
+
+	// objects.push_back(a);
 	objects.push_back(b);
-	objects.push_back(c);
+	// objects.push_back(c);
+	objects.push_back(d);
+	// objects.push_back(e);
+	// objects.push_back(f);
+	// for(Line* l: lines) objects.push_back(l);
 
-	lights.push_back(Light(Vec3(0,-10,0), 0.5));
-	lights.push_back(Light(Vec3(0,10,0), 0.5));
+	lights.push_back(Light(Vec3(-20,20,20), 1.5));
+	lights.push_back(Light(Vec3(30,50,-25), 1.8));
+	lights.push_back(Light(Vec3(30,20, 30), 1.7));
 
-    double fov = M_PI / 2.;
+    double fov = M_PI_2 / 3;
 
 	for (unsigned i = 0; i < height; ++i) {
 		for (unsigned j = 0; j < width; ++j) {
