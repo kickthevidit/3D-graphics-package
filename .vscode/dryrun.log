@@ -1,7 +1,0 @@
-make --dry-run --always-make --keep-going --print-directory
-make: Entering directory `/Users/viditgautam/Documents/Projects/ray-tracing'
- 
-make: *** No targets specified and no makefile found.  Stop.
-
-make: Leaving directory `/Users/viditgautam/Documents/Projects/ray-tracing'
- 
