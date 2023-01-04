@@ -83,3 +83,8 @@ struct Vec3 {
   double J = 0.f;
   double K = 0.f;
 };
+
+std::ostream &operator<<(std::ostream &o, const Vec3 &v) {
+  o << v.I << ',' << v.J << ',' << v.K;
+  return o;
+}

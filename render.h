@@ -1,13 +1,16 @@
 #pragma once
 
 #include <cmath>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <string>
 
 #include "Vec3.h"
+#include "light.h"
+#include "material.h"
 #include "pixel.h"
-#include "shapes/shape.h"
+#include "shapes/checkerboard.h"
 #include "shapes/sphere.h"
 
 using std::map;
@@ -21,11 +24,9 @@ vector<Shape *> CreateObjects(map<string, Material> &mmap,
 
   Sphere *b = new Sphere(Vec3(-0.08, -0.5, -6), 0.6, mmap.at("red_rubber"));
   Sphere *d = new Sphere({0, -1.5, -7}, 0.3, mmap.at("pearl"));
-  //   Sphere *e = new Sphere({-4, -3, -20}, 1.5, mmap.at("mirror"));
 
   objects.push_back(b);
   objects.push_back(d);
-  //   objects.push_back(e);
 
   return objects;
 }
@@ -66,9 +67,8 @@ vector<vector<Pixel>> CreateCanvas(const unsigned &width,
 }
 
 void WritePPM(vector<vector<Pixel>> &pixels, string &file_path) {
-
-  if (file_path.substr(file_path.size() - 4, 4) != ".ppm")
-    file_path += ".ppm";
+  std::cout << "Starting file WritePPM\n";
+  if (file_path.substr(file_path.size() - 4, 4) != ".ppm") file_path += ".ppm";
 
   std::ofstream ofs;
   ofs.open(file_path);
@@ -80,6 +80,8 @@ void WritePPM(vector<vector<Pixel>> &pixels, string &file_path) {
     ofs << '\n';
   }
   ofs.close();
+
+  std::cout << "Written file to file path: " << file_path << '\n';
 }
 
 vector<uint8_t> PixelsToData(vector<vector<Pixel>> &p) {
@@ -95,3 +97,4 @@ vector<uint8_t> PixelsToData(vector<vector<Pixel>> &p) {
   }
   return out;
 }
+} // namespace Render

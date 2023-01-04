@@ -45,3 +45,8 @@ struct Pixel {
   unsigned Y = 0;
   unsigned Z = 0;
 };
+
+std::ostream &operator<<(std::ostream &os, const Pixel &p) {
+  os << p.X << ' ' << p.Y << ' ' << p.Z;
+  return os;
+}
