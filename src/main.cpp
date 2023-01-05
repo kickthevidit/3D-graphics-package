@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
   //   Pixel bg_col = Pixel(73, 178, 203);
   Pixel bg_col = Pixel(0, 0, 0);
 
-  string file_path = "debug/output.ppm";
+  string file_path = "bin/output.ppm";
   vector<vector<Pixel>> sample_img(height,
                                    vector<Pixel>(width, Pixel(0, 0, 0)));
 
@@ -59,8 +59,9 @@ int main(int argc, char *argv[]) {
   std::cout << "Successfully Finished\n";
 
   std::ofstream ofs;
-  ofs.open("out.dat");
-  for (unsigned i = 0; i < 100; ++i) ofs << i << '\n';
+  ofs.open("bin/out.ppm");
+  for (unsigned i = 0; i < 100; ++i)
+    ofs << i << '\n';
   ofs.close();
 
   return 0;
