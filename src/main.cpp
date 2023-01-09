@@ -2,9 +2,10 @@
 #include <string>
 #include <vector>
 
-#include "Vec3.h"
+// #include "Vec3.h"
 #include "pixel.h"
-#include "render.h"
+#include "render.cpp"
+#include "shapes/line.h"
 
 using std::string;
 using std::vector;
@@ -21,14 +22,29 @@ int main(int argc, char *argv[]) {
     std::cout << '\n';
   }
 
+  /*
+  Testing Line->RayIntersect
+
+  Vec3 p1(1, 1, 0), d1(2, 1, 1);
+  Vec3 p2(0, 0, 0), d2(3, 2, 1);
+
+  Line a(p1, d1);
+  Line b(p2, d2);
+  double t0 = 0.f;
+
+  std::cout << ((a.RayIntersect(b.getOrig(), b.getDir(), t0))
+                    ? "Intersects"
+                    : "Does not Intersect")
+            << '\n'; */
+
   constexpr unsigned width = 1024;
   constexpr unsigned height = 768;
   constexpr unsigned frames = 10;
   Vec3 orig(0, 0, 0);
   //   Pixel bg_col = Pixel(73, 178, 203);
-  Pixel bg_col = Pixel(0, 0, 0);
+  Pixel bg_col = Pixel(255, 55, 255);
 
-  string file_path = "bin/output.ppm";
+  string file_path = "bin/output3.ppm";
   vector<vector<Pixel>> sample_img(height,
                                    vector<Pixel>(width, Pixel(0, 0, 0)));
 
@@ -46,7 +62,7 @@ int main(int argc, char *argv[]) {
       {"red_rubber", Material(cmap.at("red1"), 10., Vec3(0.9, 0.1, 0.0))},
       {"mirror", Material(cmap.at("black"), 1425., Vec3(1, 1, 1))},
       {"plane_material", Material(cmap.at("white"), 0, Vec3(1, 0.0, 0.0))},
-      {"line_material", Material(cmap.at("white"), 12451251., Vec3(1, 1, 0))},
+      {"line_material", Material(cmap.at("green"), 0.f, Vec3(1, 1, 0))},
   };
   vector<Shape *> objects = Render::CreateObjects(mmap, cmap);
   vector<Light> lights = Render::CreateLighting();
@@ -59,10 +75,6 @@ int main(int argc, char *argv[]) {
   std::cout << "Successfully Finished\n";
 
   std::ofstream ofs;
-  ofs.open("bin/out.ppm");
-  for (unsigned i = 0; i < 100; ++i)
-    ofs << i << '\n';
-  ofs.close();
 
   return 0;
 };

@@ -1,5 +1,3 @@
-#pragma once
-
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -11,6 +9,7 @@
 #include "material.h"
 #include "pixel.h"
 #include "shapes/checkerboard.h"
+#include "shapes/line.h"
 #include "shapes/sphere.h"
 
 using std::map;
@@ -24,9 +23,28 @@ vector<Shape *> CreateObjects(map<string, Material> &mmap,
 
   Sphere *b = new Sphere(Vec3(-0.08, -0.5, -6), 0.6, mmap.at("red_rubber"));
   Sphere *d = new Sphere({0, -1.5, -7}, 0.3, mmap.at("pearl"));
+  vector<Line *> lines = {
+      // new Line(),
+      // new Line(mmap.at("line_material"), Vec3(0, 1, 1), Vec3(-1, -1, -1)),
+      // new Line(mmap.at("line_material"), Vec3(0, 1, 1), Vec3(-1, -1, -1)),
+  };
+  for (double x = 0; x < 2; x += 0.2) {
+    for (double y = 0; y < 0.7; y += 0.2) {
+      for (double z = 0; z < 1; ++z) {
+        if (x == 0 && y == 0 && z == 0)
+          continue;
+        lines.push_back(new Line(mmap.at("line_material"), Vec3(x, y, z),
+                                 Vec3(0, 0.1, -1)));
+        lines.push_back(new Line(mmap.at("line_material"), Vec3(x, y, z),
+                                 Vec3(-0.1, -0.1, -1)));
+      }
+    }
+  }
 
   objects.push_back(b);
   objects.push_back(d);
+  for (auto &a : lines)
+    objects.push_back(a);
 
   return objects;
 }
@@ -68,7 +86,8 @@ vector<vector<Pixel>> CreateCanvas(const unsigned &width,
 
 void WritePPM(vector<vector<Pixel>> &pixels, string &file_path) {
   std::cout << "Starting file WritePPM\n";
-  if (file_path.substr(file_path.size() - 4, 4) != ".ppm") file_path += ".ppm";
+  if (file_path.substr(file_path.size() - 4, 4) != ".ppm")
+    file_path += ".ppm";
 
   std::ofstream ofs;
   ofs.open(file_path);

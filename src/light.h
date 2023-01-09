@@ -16,10 +16,38 @@ struct Light {
   double intensity = 0.5;
 };
 
-Vec3 Reflect(const Vec3 &I, const Vec3 &N) {
-  return I - N * (double)2 * (I * N);
+/**
+ * Description: Returns the Reflected ray of light
+ *
+ * Input:
+ *  @param lightRay: Ray of light to be reflected
+ *  @param normal: Normal to the object according to which the ray of light gets
+ * reflected
+ *
+ * Output: Vec3 representing returned ray of light
+ */
+Vec3 Reflect(const Vec3 &lightRay, const Vec3 &normal) {
+  return lightRay - normal * (double)2 * (lightRay * normal);
 }
 
+/**
+ * Description: Casts a ray from origin (0,0,0) through canvas and returns
+ * whether any of the environments in the object intersect with the ray. Updates
+ * params given accordingly.
+ *
+ * Input:
+ * @param orig: the position vector of the origin ray.
+ * @param dir: the direction vector of the ray
+ * @param objects: vector of objects representing the rays
+ * @param point: returns the nearest point of intersection of the ray and the
+ * object
+ * @param point_n: returns the normal of the point of intersection. Useful for
+ * reflections. Only updated if intersections happen.
+ * @param obj_mat: returns the Material of nearest intersecting object
+ *
+ * Output:
+ * bool returning whether an object intersects the ray or not.
+ */
 bool EnvironmentIntersect(const Vec3 &orig, const Vec3 &dir,
                           const vector<Shape *> &objects, double &shape_dist,
                           Vec3 &point, Vec3 &point_n, Material &obj_mat) {
@@ -31,29 +59,30 @@ bool EnvironmentIntersect(const Vec3 &orig, const Vec3 &dir,
       point = orig + dir * dist;
       point_n = s->GetNormal(point);
       if (point_n == Vec3(0, 0, 0))
-        std::cout << point << ',' << point_n << '\n';
+        throw std::runtime_error("Shape->GetNormal function returning (0,0,0)");
       obj_mat = s->GetMaterial();
     }
   }
   shape_dist = min_dist;
 
-  double checkerboard_dist = std::numeric_limits<double>::max();
-  if (fabs(dir.I) > 1e-3) {
-    double d = -(orig.I - 0.5) / dir.I;
-    Vec3 pt = orig + dir * d;
-    if (d > 0 && fabs(pt.J) < 100 && pt.K > -300 && d < min_dist) {
-      checkerboard_dist = d;
-      point = pt;
-      point_n = Vec3(1, 0, 0);
-      obj_mat.diffuse_color = (int(.5 * point.J + 1000) + int(.5 * point.K)) & 1
-                                  ? Vec3(1, 1, 1) * 255
-                                  : Vec3(1, .7, .3) * 255;
-      obj_mat.diffuse_color = obj_mat.diffuse_color * .3;
-      obj_mat.albedo = Vec3(0.9, 0.1, 0.);
-    }
-  }
+  // double checkerboard_dist = std::numeric_limits<double>::max();
+  // if (fabs(dir.I) > 1e-3) {
+  //   double d = -(orig.I - 0.5) / dir.I;
+  //   Vec3 pt = orig + dir * d;
+  //   if (d > 0 && fabs(pt.J) < 100 && pt.K > -300 && d < min_dist) {
+  //     checkerboard_dist = d;
+  //     point = pt;
+  //     point_n = Vec3(1, 0, 0);
+  //     obj_mat.diffuse_color = (int(.5 * point.J + 1000) + int(.5 * point.K))
+  //     & 1 ? Vec3(1, 1, 1) * 255 : Vec3(1, .7, .3) * 255;
+  //     obj_mat.diffuse_color = obj_mat.diffuse_color * .3;
+  //     obj_mat.albedo = Vec3(0.9, 0.1, 0.);
+  //   }
+  // }
 
-  return min(min_dist, checkerboard_dist) < std::numeric_limits<double>::max();
+  // return min(min_dist, checkerboard_dist) <
+  // std::numeric_limits<double>::max();
+  return min_dist < std::numeric_limits<double>::max();
 }
 
 Pixel CastRay(const Vec3 &orig, const Vec3 &dir, const vector<Shape *> &objects,
