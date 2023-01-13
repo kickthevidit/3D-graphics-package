@@ -17,29 +17,32 @@ using std::min;
 using std::string;
 
 namespace Render {
+/**
+ * Description: Temporary Helper function to create all objects in environment
+ * and return its vector
+ *
+ * Input:  map objects of materials and colors
+ *
+ * Output: vector of objects in our 3D environment
+ */
 vector<Shape *> CreateObjects(map<string, Material> &mmap,
                               map<string, Pixel> &cmap) {
   vector<Shape *> objects;
 
   Sphere *b = new Sphere(Vec3(-0.08, -0.5, -6), 0.6, mmap.at("red_rubber"));
   Sphere *d = new Sphere({0, -1.5, -7}, 0.3, mmap.at("pearl"));
-  vector<Line *> lines = {
-      // new Line(),
-      // new Line(mmap.at("line_material"), Vec3(0, 1, 1), Vec3(-1, -1, -1)),
-      // new Line(mmap.at("line_material"), Vec3(0, 1, 1), Vec3(-1, -1, -1)),
+  vector<Line *> lines;
+
+  for (int i = 0; i < 10; ++i) {
+    lines.push_back(new Line(mmap.at("line_material"), Vec3(i * 0.5, 0, -5),
+                             Vec3(0.000000001, 1, 0), 0.01));
+    lines.push_back(new Line(mmap.at("line_material"), Vec3(i * -0.5, 0, -5),
+                             Vec3(0.000000001, 1, 0), 0.01));
+    lines.push_back(new Line(mmap.at("line_material"), Vec3(0, i * 0.5, -5),
+                             Vec3(1, 0.0000000001, 0), 0.01));
+    lines.push_back(new Line(mmap.at("line_material"), Vec3(0, i * -0.5, -5),
+                             Vec3(1, 0.0000000001, 0), 0.01));
   };
-  for (double x = 0; x < 2; x += 0.2) {
-    for (double y = 0; y < 0.7; y += 0.2) {
-      for (double z = 0; z < 1; ++z) {
-        if (x == 0 && y == 0 && z == 0)
-          continue;
-        lines.push_back(new Line(mmap.at("line_material"), Vec3(x, y, z),
-                                 Vec3(0, 0.1, -1)));
-        lines.push_back(new Line(mmap.at("line_material"), Vec3(x, y, z),
-                                 Vec3(-0.1, -0.1, -1)));
-      }
-    }
-  }
 
   objects.push_back(b);
   objects.push_back(d);
@@ -54,7 +57,7 @@ vector<Light> CreateLighting() {
 
   lights.push_back(Light(Vec3(-20, 20, 20), 4.));
   lights.push_back(Light(Vec3(30, 50, -25), 3.));
-  lights.push_back(Light(Vec3(30, 20, 30), 1.7));
+  // lights.push_back(Light(Vec3(30, 20, 30), 1.7));
 
   return lights;
 }
@@ -67,7 +70,7 @@ vector<vector<Pixel>> CreateCanvas(const unsigned &width,
                                    vector<Light> &lights) {
   vector<vector<Pixel>> img(height, vector<Pixel>(width, Pixel(0, 0, 0)));
 
-  double fov = M_PI_2 / 3;
+  constexpr double fov = M_PI_2 / 3;
 
   for (unsigned i = 0; i < height; ++i) {
     for (unsigned j = 0; j < width; ++j) {

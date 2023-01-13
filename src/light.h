@@ -31,9 +31,9 @@ Vec3 Reflect(const Vec3 &lightRay, const Vec3 &normal) {
 }
 
 /**
- * Description: Casts a ray from origin (0,0,0) through canvas and returns
- * whether any of the environments in the object intersect with the ray. Updates
- * params given accordingly.
+ * * Description: Casts a ray from origin (0,0,0) through canvas and returns
+ * * whether any of the environments in the object intersect with the ray.
+ * * Updates params given accordingly.
  *
  * Input:
  * @param orig: the position vector of the origin ray.
@@ -44,17 +44,22 @@ Vec3 Reflect(const Vec3 &lightRay, const Vec3 &normal) {
  * @param point_n: returns the normal of the point of intersection. Useful for
  * reflections. Only updated if intersections happen.
  * @param obj_mat: returns the Material of nearest intersecting object
+ * @param obj_ptr: returns a pointer to the nearest object
  *
  * Output:
  * bool returning whether an object intersects the ray or not.
  */
 bool EnvironmentIntersect(const Vec3 &orig, const Vec3 &dir,
                           const vector<Shape *> &objects, double &shape_dist,
-                          Vec3 &point, Vec3 &point_n, Material &obj_mat) {
+                          Vec3 &point, Vec3 &point_n, Material &obj_mat,
+                          Shape *obj_ptr, bool reflect_mode = 0) {
   double min_dist = std::numeric_limits<double>::max();
   for (Shape *s : objects) {
     double dist = std::numeric_limits<double>::max();
-    if (s->RayIntersect(orig, dir, dist) && dist < min_dist) {
+    if ((s->RayIntersect(orig, dir, dist) && dist < min_dist)) {
+      if (reflect_mode && !s->LightingAware())
+        continue;
+      obj_ptr = &*s;
       min_dist = dist;
       point = orig + dir * dist;
       point_n = s->GetNormal(point);
@@ -65,35 +70,40 @@ bool EnvironmentIntersect(const Vec3 &orig, const Vec3 &dir,
   }
   shape_dist = min_dist;
 
-  // double checkerboard_dist = std::numeric_limits<double>::max();
-  // if (fabs(dir.I) > 1e-3) {
-  //   double d = -(orig.I - 0.5) / dir.I;
-  //   Vec3 pt = orig + dir * d;
-  //   if (d > 0 && fabs(pt.J) < 100 && pt.K > -300 && d < min_dist) {
-  //     checkerboard_dist = d;
-  //     point = pt;
-  //     point_n = Vec3(1, 0, 0);
-  //     obj_mat.diffuse_color = (int(.5 * point.J + 1000) + int(.5 * point.K))
-  //     & 1 ? Vec3(1, 1, 1) * 255 : Vec3(1, .7, .3) * 255;
-  //     obj_mat.diffuse_color = obj_mat.diffuse_color * .3;
-  //     obj_mat.albedo = Vec3(0.9, 0.1, 0.);
-  //   }
-  // }
+  double checkerboard_dist = std::numeric_limits<double>::max();
+  if (fabs(dir.I) > 1e-3) {
+    double d = -(orig.I - 0.5) / dir.I;
+    Vec3 pt = orig + dir * d;
+    if (d > 0 && fabs(pt.J) < 100 && pt.K > -300 && d < min_dist) {
+      checkerboard_dist = d;
+      point = pt;
+      point_n = Vec3(1, 0, 0);
+      obj_mat.diffuse_color = (int(.5 * point.J + 1000) + int(.5 * point.K)) & 1
+                                  ? Vec3(1, 1, 1) * 255
+                                  : Vec3(1, .7, .3) * 255;
+      obj_mat.diffuse_color = obj_mat.diffuse_color * .3;
+      obj_mat.albedo = Vec3(0.9, 0.1, 0.);
+    }
+  }
 
-  // return min(min_dist, checkerboard_dist) <
-  // std::numeric_limits<double>::max();
-  return min_dist < std::numeric_limits<double>::max();
+  return min(min_dist, checkerboard_dist) < std::numeric_limits<double>::max();
+  // return min_dist < std::numeric_limits<double>::max();
 }
 
 Pixel CastRay(const Vec3 &orig, const Vec3 &dir, const vector<Shape *> &objects,
-              const vector<Light> &lights, Pixel &bg_col, unsigned depth = 0) {
+              const vector<Light> &lights, Pixel &bg_col, unsigned depth = 0,
+              bool reflect = 0) {
   Vec3 coord, coord_n;
   Material mat;
+  Shape *obj_ptr = NULL;
   double min_dist = std::numeric_limits<double>::max();
 
-  if (depth > 4 ||
-      !EnvironmentIntersect(orig, dir, objects, min_dist, coord, coord_n, mat))
+  if (depth > 4 || !EnvironmentIntersect(orig, dir, objects, min_dist, coord,
+                                         coord_n, mat, obj_ptr, reflect))
     return bg_col;
+
+  if (obj_ptr && !obj_ptr->LightingAware())
+    return mat.diffuse_color;
 
   Vec3 reflect_dir = Reflect(dir, coord_n);
   Vec3 reflect_orig =
@@ -102,7 +112,7 @@ Pixel CastRay(const Vec3 &orig, const Vec3 &dir, const vector<Shape *> &objects,
           : coord + coord_n *
                         1e-3; // shift the orig to prevent obstruction by object
   Pixel reflect_color =
-      CastRay(reflect_orig, reflect_dir, objects, lights, bg_col, depth + 1);
+      CastRay(reflect_orig, reflect_dir, objects, lights, bg_col, depth + 1, 1);
 
   double diffuse_light_intensity = 0, specular_light_intensity = 0;
   for (const Light &l : lights) {
@@ -119,8 +129,10 @@ Pixel CastRay(const Vec3 &orig, const Vec3 &dir, const vector<Shape *> &objects,
     Vec3 shadow_coord, shadow_n;
     Material tmp_mat;
     if ((EnvironmentIntersect(shadow_orig, light_dir, objects, shadow_dist,
-                              shadow_coord, shadow_n, tmp_mat)) &&
-        ((shadow_coord - shadow_orig).M() < light_distance))
+                              shadow_coord, shadow_n, tmp_mat, obj_ptr,
+                              reflect)) &&
+        ((shadow_coord - shadow_orig).M() < light_distance) &&
+        (obj_ptr && !obj_ptr->LightingAware()))
       continue;
 
     diffuse_light_intensity +=
